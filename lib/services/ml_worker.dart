@@ -177,12 +177,16 @@ class _Models {
     final inShape = faceNet.getInputTensors().first.shape; // [2,112,112,3]
     faceBatch = inShape.first;
     final outs = antiSpoof.getOutputTensors();
-    clsIdx = 0;
-    maskIdx = outs.length > 1 ? 1 : 0;
+    // Resolve output order by tensor name; compute in locals because the
+    // fields are `late final` and may only be assigned once.
+    int cls = 0;
+    int mask = outs.length > 1 ? 1 : 0;
     for (int i = 0; i < outs.length; i++) {
-      if (outs[i].name == 'Identity') clsIdx = i;
-      if (outs[i].name == 'Identity_1') maskIdx = i;
+      if (outs[i].name == 'Identity') cls = i;
+      if (outs[i].name == 'Identity_1') mask = i;
     }
+    clsIdx = cls;
+    maskIdx = mask;
   }
 
   late final Interpreter faceNet;
