@@ -227,13 +227,51 @@ void main() {
       }
     }
 
-    test('first challenge is always blink or smile; count respected', () {
+    test('challenge selection: blink first, no smile, 0 = passive', () {
       for (int seed = 0; seed < 30; seed++) {
         final e = engine(3, seed: seed);
-        expect([ChallengeType.blink, ChallengeType.smile], contains(e.challenges.first));
+        expect(e.challenges.first, ChallengeType.blink);
         expect(e.challenges.length, 3);
         expect(e.challenges.toSet().length, 3);
+        expect(e.challenges, isNot(contains(ChallengeType.smile)));
       }
+      expect(engine(0).challenges, isEmpty);
+    });
+
+    test('passive mode: live face passes without any action', () {
+      final e = engine(0);
+      e.onFrame(const FaceSignals(tMs: 0, leftEyeOpen: open, rightEyeOpen: open), wellPositioned: true);
+      e.onFrame(const FaceSignals(tMs: 200, leftEyeOpen: open, rightEyeOpen: open), wellPositioned: true);
+      expect(e.phase, LivenessPhase.verifyingPassive);
+      for (int i = 0; i < 3; i++) {
+        e.onPassive(0.02, 500, 250 + i * 70);
+      }
+      expect(e.phase, LivenessPhase.passed);
+    });
+
+    test('passive mode: photo/screen is rejected', () {
+      final e = engine(0);
+      e.onFrame(const FaceSignals(tMs: 0), wellPositioned: true);
+      e.onFrame(const FaceSignals(tMs: 200), wellPositioned: true);
+      for (int i = 0; i < 3; i++) {
+        e.onPassive(0.95, 500, 250 + i * 70);
+      }
+      expect(e.phase, LivenessPhase.failed);
+    });
+
+    test('passive mode: borderline score asks for one blink', () {
+      final e = engine(0);
+      e.onFrame(const FaceSignals(tMs: 0, leftEyeOpen: open, rightEyeOpen: open), wellPositioned: true);
+      e.onFrame(const FaceSignals(tMs: 200, leftEyeOpen: open, rightEyeOpen: open), wellPositioned: true);
+      for (int i = 0; i < 3; i++) {
+        e.onPassive(0.15, 500, 250 + i * 70); // below 0.2 but above 0.1
+      }
+      expect(e.phase, LivenessPhase.challenge);
+      expect(e.tracker!.type, ChallengeType.blink);
+      for (final s in respond(ChallengeType.blink, 600)) {
+        e.onFrame(s, wellPositioned: true);
+      }
+      expect(e.phase, LivenessPhase.passed);
     });
 
     test('live user completing random challenges passes', () {
