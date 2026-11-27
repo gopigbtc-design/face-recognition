@@ -23,6 +23,11 @@ jobs:
           java-version: '21'
 
 
+      # Caches ~/.gradle (wrapper, plugins, dependencies) between runs, so later
+      # builds barely touch Maven Central and avoid its 429 rate limits.
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Set up Flutter (stable)
         uses: subosito/flutter-action@v2
         with:
@@ -59,8 +64,15 @@ jobs:
       - name: Unit tests
         run: flutter test
 
+      # Retries with back-off if Maven Central / Gradle Plugin Portal rate-limit (HTTP 429).
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          for attempt in 1 2 3 4; do
+            if flutter build apk --release; then exit 0; fi
+            echo "Build attempt $attempt failed; waiting before retry..."
+            sleep $((attempt * 60))
+          done
+          exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
