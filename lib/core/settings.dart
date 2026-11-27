@@ -4,8 +4,9 @@ class AppSettings {
   const AppSettings({
     this.matchThreshold = 0.60,
     this.spoofThreshold = 0.20,
-    this.recognizeChallenges = 1,
-    this.registerChallenges = 2,
+    this.recognizeChallenges = 0,
+    this.registerChallenges = 0,
+    this.adaptiveBlink = true,
     this.minFaceRatio = 0.25,
     this.minSharpness = 80,
     this.antiSpoofEnabled = true,
@@ -19,6 +20,9 @@ class AppSettings {
   final int recognizeChallenges;
   final int registerChallenges;
 
+  /// Passive mode: ask for one blink only when the spoof score is borderline.
+  final bool adaptiveBlink;
+
   /// Minimum face width relative to the frame width.
   final double minFaceRatio;
 
@@ -30,6 +34,7 @@ class AppSettings {
 
   LivenessConfig livenessConfig({required bool register}) => LivenessConfig(
         challengeCount: register ? registerChallenges : recognizeChallenges,
+        adaptiveBlink: adaptiveBlink,
         passiveEnabled: antiSpoofEnabled,
         spoofThreshold: spoofThreshold,
         minLaplacian: minSharpness,
@@ -40,6 +45,7 @@ class AppSettings {
     double? spoofThreshold,
     int? recognizeChallenges,
     int? registerChallenges,
+    bool? adaptiveBlink,
     double? minFaceRatio,
     int? minSharpness,
     bool? antiSpoofEnabled,
@@ -50,6 +56,7 @@ class AppSettings {
         spoofThreshold: spoofThreshold ?? this.spoofThreshold,
         recognizeChallenges: recognizeChallenges ?? this.recognizeChallenges,
         registerChallenges: registerChallenges ?? this.registerChallenges,
+        adaptiveBlink: adaptiveBlink ?? this.adaptiveBlink,
         minFaceRatio: minFaceRatio ?? this.minFaceRatio,
         minSharpness: minSharpness ?? this.minSharpness,
         antiSpoofEnabled: antiSpoofEnabled ?? this.antiSpoofEnabled,
@@ -61,6 +68,7 @@ class AppSettings {
         'spoofThreshold': '$spoofThreshold',
         'recognizeChallenges': '$recognizeChallenges',
         'registerChallenges': '$registerChallenges',
+        'adaptiveBlink': '$adaptiveBlink',
         'minFaceRatio': '$minFaceRatio',
         'minSharpness': '$minSharpness',
         'antiSpoofEnabled': '$antiSpoofEnabled',
@@ -77,6 +85,7 @@ class AppSettings {
       spoofThreshold: dbl('spoofThreshold', d.spoofThreshold),
       recognizeChallenges: i('recognizeChallenges', d.recognizeChallenges),
       registerChallenges: i('registerChallenges', d.registerChallenges),
+      adaptiveBlink: b('adaptiveBlink', d.adaptiveBlink),
       minFaceRatio: dbl('minFaceRatio', d.minFaceRatio),
       minSharpness: i('minSharpness', d.minSharpness),
       antiSpoofEnabled: b('antiSpoofEnabled', d.antiSpoofEnabled),

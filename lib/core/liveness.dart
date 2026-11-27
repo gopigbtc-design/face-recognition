@@ -113,19 +113,25 @@ class ChallengeTracker {
 
 class LivenessConfig {
   const LivenessConfig({
-    this.challengeCount = 1,
+    this.challengeCount = 0,
     this.challengeTimeoutMs = 7000,
-    this.positionHoldMs = 300,
+    this.positionHoldMs = 150,
+    this.adaptiveBlink = true,
     this.passiveEnabled = true,
     this.spoofThreshold = 0.2,
-    this.minPassiveSamples = 4,
+    this.minPassiveSamples = 3,
     this.passiveWindow = 10,
     this.minLaplacian = 80,
     this.passiveTimeoutMs = 4000,
   });
 
+  /// 0 = passive only (no user action needed).
   final int challengeCount;
   final int challengeTimeoutMs;
+
+  /// In passive mode, ask for a single blink only when the anti-spoof score
+  /// is borderline (between half the threshold and the threshold).
+  final bool adaptiveBlink;
   final int positionHoldMs;
   final bool passiveEnabled;
 
@@ -157,6 +163,7 @@ class LivenessEngine {
   int? _positionedSince;
   int _passiveStartMs = 0;
   int blurStreak = 0;
+  bool escalated = false;
   final List<double> _scores = <double>[];
 
   List<double> get passiveScores => List.unmodifiable(_scores);
@@ -170,19 +177,19 @@ class LivenessEngine {
     failureReason = null;
     _positionedSince = null;
     blurStreak = 0;
+    escalated = false;
     _scores.clear();
   }
 
   void start() {
     reset();
     phase = LivenessPhase.positioning;
-    // First challenge is always an expression change (blink/smile), which a
-    // still photo can never perform; the rest are drawn randomly so a
-    // pre-recorded video cannot anticipate the sequence.
-    final first = <ChallengeType>[ChallengeType.blink, ChallengeType.smile]..shuffle(_rng);
-    final rest = ChallengeType.values.where((c) => c != first.first).toList()..shuffle(_rng);
-    final int n = math.max(1, math.min(config.challengeCount, ChallengeType.values.length));
-    challenges = [first.first, ...rest].take(n).toList();
+    // Passive mode (count 0): no challenges at all. Otherwise the first
+    // challenge is a blink (a still photo can never blink) and the rest are
+    // drawn randomly so a pre-recorded video cannot anticipate them.
+    final rest = <ChallengeType>[ChallengeType.turnHead, ChallengeType.nod]..shuffle(_rng);
+    final int n = math.max(0, math.min(config.challengeCount, 1 + rest.length));
+    challenges = [ChallengeType.blink, ...rest].take(n).toList();
   }
 
   void fail(String reason, int tMs) {
@@ -205,9 +212,15 @@ class LivenessEngine {
         if (wellPositioned) {
           _positionedSince ??= s.tMs;
           if (s.tMs - _positionedSince! >= config.positionHoldMs) {
-            phase = LivenessPhase.challenge;
-            challengeIndex = 0;
-            tracker = ChallengeTracker(challenges[0], s.tMs);
+            if (challenges.isEmpty) {
+              phase = LivenessPhase.verifyingPassive;
+              _passiveStartMs = s.tMs;
+              _checkPassive(s.tMs);
+            } else {
+              phase = LivenessPhase.challenge;
+              challengeIndex = 0;
+              tracker = ChallengeTracker(challenges[0], s.tMs);
+            }
           }
         } else {
           _positionedSince = null;
@@ -277,7 +290,21 @@ class LivenessEngine {
       (_median >= config.spoofThreshold || _fracAbove >= 0.5);
 
   void _checkPassive(int tMs) {
-    if (!config.passiveEnabled || passiveOk) {
+    if (!config.passiveEnabled) {
+      phase = LivenessPhase.passed;
+    } else if (passiveOk) {
+      if (config.adaptiveBlink &&
+          challenges.isEmpty &&
+          !escalated &&
+          _median >= config.spoofThreshold * 0.5) {
+        // Borderline score: confirm with one quick blink.
+        escalated = true;
+        challenges = const [ChallengeType.blink];
+        challengeIndex = 0;
+        tracker = ChallengeTracker(ChallengeType.blink, tMs);
+        phase = LivenessPhase.challenge;
+        return;
+      }
       phase = LivenessPhase.passed;
     } else if (tMs - _passiveStartMs > config.passiveTimeoutMs) {
       fail(tooBlurry
@@ -291,11 +318,11 @@ class LivenessEngine {
       case LivenessPhase.idle:
         return 'Look at the camera';
       case LivenessPhase.positioning:
-        return 'Look straight at the camera';
+        return 'Look at the camera';
       case LivenessPhase.challenge:
         return tracker?.type.instruction ?? '';
       case LivenessPhase.verifyingPassive:
-        return tooBlurry ? 'Hold still – image is blurry' : 'Hold still…';
+        return tooBlurry ? 'Hold still – image is blurry' : 'Checking…';
       case LivenessPhase.passed:
         return 'Live face verified';
       case LivenessPhase.failed:
