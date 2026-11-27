@@ -34,6 +34,14 @@ jobs:
       - name: Generate platform files
         run: flutter create --org com.faceguard --project-name face_guard --platforms android .
 
+      # tflite_flutter compiles Java for 11 while Kotlin defaults to 17; the plugin
+      # has no Kotlin sources, so downgrade the JVM-target check to a warning.
+      - name: Relax Kotlin JVM-target check
+        run: |
+          grep -q "kotlin.jvm.target.validation.mode" android/gradle.properties || \
+            printf '\nkotlin.jvm.target.validation.mode=warning\n' >> android/gradle.properties
+          cat android/gradle.properties
+
       - name: Get packages
         run: flutter pub get
 
